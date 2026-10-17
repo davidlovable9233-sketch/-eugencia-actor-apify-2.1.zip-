@@ -1,0 +1,16 @@
+{
+ "title":"Eugência — Orquestrador Luna + Manus","type":"object","schemaVersion":1,
+ "properties":{
+  "action":{"title":"Ação","type":"string","editor":"select","enum":["status","generate","enqueue","dispatch","sync"],"default":"status"},
+  "requestId":{"title":"Identificador único do pedido","type":"string","editor":"textfield","description":"Reutilize o mesmo identificador ao repetir uma chamada. Não reutilize para outro pedido."},
+  "prompt":{"title":"O que o Luna deve construir","type":"string","editor":"textarea"},
+  "execution":{"title":"Código e instruções já preparados (enqueue)","type":"string","editor":"textarea"},
+  "knowledge":{"title":"Skills adicionais para este pedido","type":"string","editor":"textarea","description":"Texto das skills; enviado apenas ao gerador. Não inclua chaves."},
+  "openaiApiKey":{"title":"🔑 Segredo OpenAI","type":"string","editor":"textfield","isSecret":true},
+  "manusApiKey":{"title":"🔑 Segredo Manus","type":"string","editor":"textfield","isSecret":true},
+  "cycle":{"title":"Ciclo real da conta Manus","type":"string","editor":"textfield"},
+  "dailyAvailable":{"title":"Saldo diário confirmado","type":"number","editor":"number","minimum":0,"maximum":300,"default":0},
+  "cycleAvailable":{"title":"Saldo disponível no ciclo","type":"number","editor":"number","minimum":0,"maximum":1500,"default":0},
+  "live":{"title":"Enviar tarefa real ao Manus","type":"boolean","editor":"checkbox","default":false}
+ },"required":["action"]
+}
