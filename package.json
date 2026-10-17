@@ -1,0 +1,1 @@
+{"name":"eugencia-manus-orchestrator","version":"2.1.0","type":"module","private":true,"scripts":{"start":"node src/main.js","test":"node --test src/*.test.js"},"dependencies":{"apify":"^3.4.0"},"engines":{"node":">=22"}}
