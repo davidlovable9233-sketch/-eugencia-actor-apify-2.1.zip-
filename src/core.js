@@ -53,7 +53,9 @@ export async function operate(input, { load, save, openai, manus, now = () => ne
  }
  if (action !== 'dispatch') throw new Error('Ação desconhecida');
  if (s.jobs.some(j=>blocked.has(j.state))) return {state:'blocked',reason:'Execução ativa ou envio incerto.',...summary(s)};
- const job=s.jobs.find(j=>j.state==='queued');
+ const selectedId = input.requestId === undefined || input.requestId === '' ? null : text(input.requestId,'requestId',100);
+ const job=s.jobs.find(j=>j.state==='queued' && (selectedId === null || j.id === selectedId));
+ if (!job && selectedId !== null) return {state:'blocked',reason:'Pedido selecionado não está na fila; nenhum outro pedido foi enviado.'};
  if (!job) return {state:'empty'};
  const cycle=text(input.cycle,'cycle',80);
  const day=now().toISOString().slice(0,10);
