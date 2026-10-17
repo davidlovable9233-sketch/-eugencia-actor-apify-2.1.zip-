@@ -4,6 +4,7 @@ const text = (x, name, max) => {
  if (typeof x !== 'string' || !x.trim() || x.length > max) throw new Error(`Campo inválido: ${name}`);
  return x;
 };
+const incomplete = value => /\[\s*DESCREVA AQUI\b|^\s*(?:Não (?:é possível|posso|consigo) preparar|Envie (?:a|uma) descrição)/iu.test(value);
 export const emptyState = () => ({ version: 1, jobs: [] });
 export function summary(s) {
  return { model: MODEL, jobs: s.jobs.map(({id,state,taskId,taskUrl,usage,execution}) => ({id,state,taskId,taskUrl,usage,execution})) };
@@ -20,7 +21,10 @@ export async function operate(input, { load, save, openai, manus, now = () => ne
   if (s.jobs.length >= 1000) throw new Error('Histórico atingiu 1000 pedidos; arquivamento administrativo necessário.');
   const job = { id, state: action === 'generate' ? 'generating' : 'queued' };
   if (action === 'enqueue') job.execution = text(input.execution,'execution',12000);
-  else text(input.prompt,'prompt',12000);
+  else {
+   text(input.prompt,'prompt',12000);
+   if (incomplete(input.prompt)) return {state:'needs_input',reason:'O pedido ainda contém um marcador. Informe o projeto antes de gerar código.'};
+  }
   const knowledge = input.knowledge || '';
   if (typeof knowledge !== 'string' || knowledge.length > 50000) throw new Error('Conhecimento deve ter até 50000 caracteres.');
   s.jobs.push(job); await save(s); // persist intention before any paid request
@@ -32,13 +36,13 @@ export async function operate(input, { load, save, openai, manus, now = () => ne
     if (r.status !== 'completed') throw new Error('Geração incompleta');
     const output = (r.output || []).filter(x=>x.type==='message').flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
     job.execution = text(JSON.parse(output).execution,'execution gerada',12000);
-    job.state='queued'; await save(s);
+    job.state=incomplete(job.execution) ? 'needs_input' : 'queued'; await save(s);
    } catch {
     job.state='unknown'; await save(s);
     return {state:'unknown',reason:'Geração falhou ou ficou incerta. Não repetida automaticamente.',...summary(s)};
    }
   }
-  return {state:'queued',...summary(s)};
+  return {state:job.state,...summary(s)};
  }
  if (action === 'sync') {
   const active=s.jobs.find(j=>j.state==='active');
@@ -57,6 +61,10 @@ export async function operate(input, { load, save, openai, manus, now = () => ne
  const job=s.jobs.find(j=>j.state==='queued' && (selectedId === null || j.id === selectedId));
  if (!job && selectedId !== null) return {state:'blocked',reason:'Pedido selecionado não está na fila; nenhum outro pedido foi enviado.'};
  if (!job) return {state:'empty'};
+ if (incomplete(job.execution || '')) {
+  job.state='needs_input'; await save(s);
+  return {state:'needs_input',reason:'Este pedido contém uma solicitação de informações, sem pacote executável. Nenhuma tarefa foi enviada.',...summary(s)};
+ }
  const cycle=text(input.cycle,'cycle',80);
  const day=now().toISOString().slice(0,10);
  const daily=input.dailyAvailable, monthly=input.cycleAvailable;
