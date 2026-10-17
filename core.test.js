@@ -1,0 +1,14 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {operate,emptyState} from './core.js';
+function memory(){let state=emptyState();return {load:async()=>structuredClone(state),save:async s=>{state=structuredClone(s);},openai:async()=>{throw Error('unexpected paid call')},manus:async()=>{throw Error('unexpected paid call')}}}
+const enqueue={action:'enqueue',requestId:'one',execution:'print(1)'};
+const dispatch={action:'dispatch',cycle:'real-cycle',dailyAvailable:300,cycleAvailable:1500};
+test('simulation never calls provider',async()=>{let d=memory();await operate(enqueue,d);assert.equal((await operate(dispatch,d)).state,'simulation')});
+test('duplicate request persists across runs',async()=>{let d=memory();await operate(enqueue,d);assert.equal((await operate(enqueue,d)).state,'duplicate')});
+test('insufficient budget',async()=>{let d=memory();await operate(enqueue,d);assert.equal((await operate({...dispatch,dailyAvailable:59},d)).state,'blocked')});
+test('uncertain create blocks every retry',async()=>{let d=memory();await operate(enqueue,d);assert.equal((await operate({...dispatch,live:true},d)).state,'unknown');assert.equal((await operate({...dispatch,live:true},d)).state,'blocked')});
+test('background work and missing usage remain active',async()=>{let d=memory();await operate(enqueue,d);d.manus=async()=>({ok:true,task_id:'abc'});await operate({...dispatch,live:true},d);d.manus=async()=>({ok:true,task:{status:'stopped',has_running_background_jobs:false}});await operate({action:'sync'},d);assert.equal((await operate(dispatch,d)).state,'blocked');d.manus=async()=>({ok:true,task:{status:'stopped',has_running_background_jobs:true,credit_usage:15}});await operate({action:'sync'},d);assert.equal((await operate(dispatch,d)).state,'blocked')});
+test('completed task accounted',async()=>{let d=memory();await operate(enqueue,d);d.manus=async()=>({ok:true,task_id:'abc'});await operate({...dispatch,live:true},d);d.manus=async()=>({ok:true,task:{status:'stopped',has_running_background_jobs:false,credit_usage:305}});await operate({action:'sync'},d);await operate({...enqueue,requestId:'two'},d);assert.equal((await operate(dispatch,d)).state,'blocked')});
+test('generator uses exact model and queues result',async()=>{let d=memory();d.openai=async p=>{assert.equal(p.model,'gpt-5.6-luna');return {status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({execution:'print(1)'})}]}]}};assert.equal((await operate({action:'generate',requestId:'gen',prompt:'hello'},d)).state,'queued')});
+test('incomplete generation never reaches Manus',async()=>{let d=memory();d.openai=async()=>({status:'incomplete'});assert.equal((await operate({action:'generate',requestId:'gen',prompt:'hello'},d)).state,'unknown')});
+test('invalid balances rejected',async()=>{let d=memory();await operate(enqueue,d);await assert.rejects(()=>operate({...dispatch,dailyAvailable:NaN},d))});
